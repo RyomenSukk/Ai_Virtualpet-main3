@@ -1,0 +1,22 @@
+{
+  "name": "ai-virtualpet",
+  "version": "1.0.0",
+  "type": "module",
+  "description": "Virtual Pet Game with AI Chat",
+  "scripts": {
+    "start": "node Backend/server.js",
+    "dev": "nodemon Backend/server.js"
+  },
+  "dependencies": {
+    "@google/genai": "^1.39.0",
+    "cors": "^2.8.5",
+    "dotenv": "^17.2.3",
+    "express": "^4.18.2",
+    "openai": "^6.17.0",
+    "sqlite": "^5.1.1",
+    "sqlite3": "^5.1.7"
+  },
+  "devDependencies": {
+    "nodemon": "^3.0.1"
+  }
+}
