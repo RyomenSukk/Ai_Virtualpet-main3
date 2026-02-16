@@ -2,7 +2,7 @@
 import "dotenv/config";
 import { analyzeText, intentToAction } from "./nlp.service.js";
 import { generateCatReply } from "./openai.service.js";
-import { saveMessage, getRecentMessages, loadPetStateDB, savePetStateDB } from "../db.js"; // ✅ import เพิ่ม
+import { saveMessage, getRecentMessages, loadPetStateDB, savePetStateDB } from "../db.js";
 
 // 🔧 ปรับค่าตรงนี้ได้ตามใจ
 const DECAY_RATE_PER_HOUR = {
@@ -14,7 +14,6 @@ const DECAY_RATE_PER_HOUR = {
 /** ---------------------------
  * Pet State (In-Memory + DB Sync)
  * --------------------------- */
-// กำหนดค่าเริ่มต้น (เผื่อเปิดครั้งแรกสุดที่ยังไม่มี DB)
 let petState = {
   hunger: 100,
   happiness: 80,
@@ -24,14 +23,12 @@ let petState = {
   lastUpdatedAt: Date.now()
 };
 
-// ✅ ฟังก์ชันเริ่มระบบ: โหลดค่าเก่าจาก DB มาทับค่าเริ่มต้น
 async function initPetSystem() {
   try {
     const saved = await loadPetStateDB();
     if (saved) {
       console.log("📥 Loaded pet state from database.");
       petState = saved;
-      // คำนวณเวลาที่หายไปทันทีที่เปิดเซิร์ฟ
       applyTimeDecay();
     } else {
       console.log("🆕 New pet created. Saving initial state...");
@@ -42,7 +39,6 @@ async function initPetSystem() {
   }
 }
 
-// เรียกทำงานทันทีเมื่อไฟล์ถูกโหลด
 initPetSystem();
 
 function clamp(n, min = 0, max = 100) {
@@ -59,8 +55,6 @@ function applyTimeDecay() {
   }
 
   const elapsedHours = elapsedMs / (1000 * 60 * 60);
-  
-  // ถ้าเวลาผ่านไปน้อยมาก (เช่น request ถี่ๆ) ไม่ต้องคำนวณ
   if (elapsedHours < 0.001) return;
 
   petState.hunger = clamp(petState.hunger - DECAY_RATE_PER_HOUR.hunger * elapsedHours);
@@ -68,36 +62,30 @@ function applyTimeDecay() {
   petState.bond = clamp(petState.bond - DECAY_RATE_PER_HOUR.bond * elapsedHours);
 
   petState.lastUpdatedAt = now;
-
-  // ✅ บันทึกลง DB (แบบไม่ต้องรอ await เพื่อไม่ให้หน่วง response)
+  // บันทึกแบบ Fire & Forget (ไม่ต้องรอ)
   savePetStateDB(petState).catch(console.error);
 }
 
 function updateState(patch) {
   if (!patch) return;
-
   if (typeof patch.hunger === "number") petState.hunger = clamp(patch.hunger);
   if (typeof patch.happiness === "number") petState.happiness = clamp(patch.happiness);
   if (typeof patch.bond === "number") petState.bond = clamp(patch.bond);
-
   if (typeof patch.action === "string") petState.action = patch.action;
   if (typeof patch.emotion === "string") petState.emotion = patch.emotion;
-
-  // ✅ บันทึกลง DB ทุกครั้งที่มีการเปลี่ยนค่า
+  
   savePetStateDB(petState).catch(console.error);
 }
 
 function autoResetAction(ms = 2000) {
   setTimeout(() => {
     petState.action = "idle";
-    // ✅ บันทึกตอนกลับเป็น idle
     savePetStateDB(petState).catch(console.error);
   }, ms);
 }
 
-// ✅ route ต้องการตัวนี้
 export function getState() {
-  applyTimeDecay(); // คำนวณย้อนหลังทุกครั้งก่อนส่ง state ออก
+  applyTimeDecay();
   return { ...petState };
 }
 
@@ -106,43 +94,30 @@ export function getState() {
  * --------------------------- */
 export function handleClick() {
   applyTimeDecay();
-
   updateState({
     action: "happy",
     happiness: petState.happiness + 2,
     bond: petState.bond + 1,
     emotion: "happy"
   });
-
   autoResetAction(1200);
-
-  return {
-    pet: getState(),
-    message: "เมี๊ยว~ ลูบหัวแล้วฟินเลย 😺"
-  };
+  return { pet: getState(), message: "เมี๊ยว~ ลูบหัวแล้วฟินเลย 😺" };
 }
 
 export function handleFeed() {
   applyTimeDecay();
-
   updateState({
     action: "eat",
     hunger: 100,
     happiness: petState.happiness + 5,
     emotion: "happy"
   });
-
   autoResetAction(1500);
-
-  return {
-    pet: getState(),
-    message: "ง่ำๆ อิ่มแล้วเมี๊ยว~ 😺"
-  };
+  return { pet: getState(), message: "ง่ำๆ อิ่มแล้วเมี๊ยว~ 😺" };
 }
 
 export function handlePlay() {
   applyTimeDecay();
-
   updateState({
     action: "play",
     happiness: petState.happiness + 10,
@@ -150,79 +125,44 @@ export function handlePlay() {
     hunger: petState.hunger + 5,
     emotion: "playful"
   });
-
   autoResetAction(1800);
-
-  return {
-    pet: getState(),
-    message: "มาเล่นกัน! โยนบอลมาเลยเมี๊ยว~ 🧶😺"
-  };
+  return { pet: getState(), message: "มาเล่นกัน! โยนบอลมาเลยเมี๊ยว~ 🧶😺" };
 }
 
 /** ---------------------------
- * Chat Logic
+ * Chat Logic (Optimized for Speed 🚀)
  * --------------------------- */
 function fallbackReply({ intent, sentiment }) {
   if (sentiment === "NEGATIVE" || intent === "sad") {
-    return {
-      reply: "เมี๊ยว… ไม่เป็นไรนะ เราอยู่ตรงนี้ด้วยเสมอ 🫶😿",
-      action: "idle",
-      emotion: "comforting"
-    };
+    return { reply: "เมี๊ยว… ไม่เป็นไรนะ เราอยู่ตรงนี้ด้วยเสมอ 🫶😿", action: "idle", emotion: "comforting" };
   }
   if (intent === "lonely") {
-    return {
-      reply: "เหงาหรอเมี๊ยว~ มาเล่นด้วยกันไหม หรืออยากเล่าอะไรให้ฟัง 😺",
-      action: "play",
-      emotion: "playful"
-    };
+    return { reply: "เหงาหรอเมี๊ยว~ มาเล่นด้วยกันไหม หรืออยากเล่าอะไรให้ฟัง 😺", action: "play", emotion: "playful" };
   }
-  return {
-    reply: "เมี๊ยว~ แล้วต่อจากนี้อยากทำอะไรดี 😸",
-    action: "idle",
-    emotion: "neutral"
-  };
+  return { reply: "เมี๊ยว~ แล้วต่อจากนี้อยากทำอะไรดี 😸", action: "idle", emotion: "neutral" };
 }
 
 export async function handleChat(sessionId, text) {
-  applyTimeDecay(); // อัปเดตเวลาก่อนเริ่มคิด
+  applyTimeDecay();
 
-  // 1) NLP
-  let analysis = { intent: "unknown", sentiment: "NEUTRAL" };
-  try {
-    analysis = await analyzeText(text);
-  } catch (e) {
-    console.error("NLP analyzeText failed:", e?.message || e);
-  }
+  // 1. Parallel Execution: เริ่ม NLP + ดึง History พร้อมกันเพื่อประหยัดเวลา
+  const nlpPromise = analyzeText(text).catch(e => ({ intent: "unknown", sentiment: "NEUTRAL" }));
+  const historyPromise = getRecentMessages(sessionId, 6).catch(e => []); // 🚀 ลด History เหลือ 6
 
+  const [analysis, history] = await Promise.all([nlpPromise, historyPromise]);
   const { intent, sentiment } = analysis;
 
-  // 2) History
-  let history = [];
-  try {
-    history = await getRecentMessages(sessionId, 12);
-  } catch (e) {
-    console.error("DB getRecentMessages failed:", e?.message || e);
-  }
-
-  // 3) LLM Generation
+  // 2. Generate Reply (AI)
   let ai;
   try {
-    ai = await generateCatReply({
-      userText: text,
-      history,
-      analysis,
-      petState // ส่ง state ที่อัปเดตแล้ว
-    });
+    ai = await generateCatReply({ userText: text, history, analysis, petState });
   } catch (e) {
-    console.error("OpenAI generateCatReply failed:", e?.message || e);
+    console.error("AI Error:", e);
     ai = fallbackReply({ intent, sentiment });
   }
 
-  // 4) Map Action
+  // 3. Logic เปลี่ยนค่าพลัง (ไม่ต้องรอ DB)
   const action = ai.action || intentToAction(intent);
-
-  // 5) Update State Logic
   let happinessChange = 0, bondChange = 0, hungerChange = 0;
 
   if (action === "play") { happinessChange += 12; bondChange += 8; hungerChange += 5; }
@@ -248,29 +188,13 @@ export async function handleChat(sessionId, text) {
 
   autoResetAction(2000);
 
-  // 6) Save Chat History
-  try {
-    await saveMessage({
-      sessionId,
-      role: "user",
-      text,
-      intent,
-      sentiment,
-      petState: getState()
-    });
+  // 4. Fire & Forget Saving 🚀 (บันทึกลง DB ทีหลัง ไม่รอ await)
+  Promise.all([
+    saveMessage({ sessionId, role: "user", text, intent, sentiment, petState: getState() }),
+    saveMessage({ sessionId, role: "assistant", text: ai.reply, intent, sentiment, petState: getState() })
+  ]).catch(e => console.error("DB Background Save Error:", e));
 
-    await saveMessage({
-      sessionId,
-      role: "assistant",
-      text: ai.reply,
-      intent,
-      sentiment,
-      petState: getState()
-    });
-  } catch (e) {
-    console.error("DB saveMessage failed:", e?.message || e);
-  }
-
+  // 5. ส่งคำตอบทันที!
   return {
     pet: getState(),
     message: ai.reply,

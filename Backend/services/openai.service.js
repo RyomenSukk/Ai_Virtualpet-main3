@@ -1,6 +1,7 @@
-// Backend/services/openai.service.js  (ยังใช้ชื่อไฟล์เดิมได้ เพื่อลดการแก้)
+// Backend/services/openai.service.js (ยังใช้ชื่อไฟล์เดิมได้ เพื่อลดการแก้)
 import "dotenv/config";
 import { GoogleGenAI } from "@google/genai";
+import { performance } from "perf_hooks"; // เพิ่มตัวจับเวลาสำหรับ Node.js
 
 let client = null;
 
@@ -19,7 +20,7 @@ function getClient() {
   return client;
 }
 
-const MODEL = process.env.GEMINI_MODEL || "gemini-3-flash-preview";
+const MODEL = process.env.GEMINI_MODEL || "gemini-2.5-flash";
 
 // helper: แปลง history จาก DB เป็นข้อความรวม (Gemini SDK example รับ string ได้ง่าย)
 // ถ้าคุณอยากละเอียดขึ้นค่อยปรับเป็น contents แบบ role/parts ทีหลัง
@@ -58,11 +59,20 @@ ${formatHistory(history)}
 USER: ${userText}
   `.trim();
 
-  // Gemini quickstart ตัวอย่างใช้ ai.models.generateContent({model, contents:"..."}) :contentReference[oaicite:4]{index=4}
+  // --- เริ่มส่วนการวัด Latency ---
+  const startTime = performance.now();
+  console.log(`📡 Sending request to ${MODEL}...`);
+
+  // Gemini quickstart ตัวอย่างใช้ ai.models.generateContent({model, contents:"..."})
   const resp = await ai.models.generateContent({
     model: MODEL,
     contents: `${system}\n\n${context}`,
   });
+
+  const endTime = performance.now();
+  const latency = (endTime - startTime).toFixed(2);
+  console.log(`✅ Response received in ${latency}ms (${(latency / 1000).toFixed(2)}s)`);
+  // --- จบส่วนการวัด Latency ---
 
   const text = (resp?.text || "").trim();
   if (!text) {

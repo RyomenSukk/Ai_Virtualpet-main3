@@ -60,7 +60,10 @@ export async function clickPet() {
 // --- 3. Chat (ส่งข้อความ) ---
 export async function sendChat(text) {
   try {
-    const res = await fetch(`${API_BASE}/chat`, { // หรือ /pet/chat แล้วแต่ Route
+    // ❌ ของเดิม (ผิด): fetch(`${API_BASE}/chat`, ...
+    
+    // ✅ แก้เป็น (ถูก): ต้องมี /pet คั่นกลาง
+    const res = await fetch(`${API_BASE}/pet/chat`, { 
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ 
@@ -68,6 +71,9 @@ export async function sendChat(text) {
         sessionId: getSessionId() 
       }),
     });
+    
+    if (!res.ok) throw new Error(`Server error: ${res.status}`); // เช็ค error เพิ่ม
+    
     return await res.json();
   } catch (err) {
     console.error("Chat error:", err);
