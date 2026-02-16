@@ -19,6 +19,7 @@ export async function initDb() {
   await db.exec(`
     PRAGMA journal_mode = WAL;
 
+    -- ตารางเก็บประวัติการคุย (เดิม)
     CREATE TABLE IF NOT EXISTS conversations (
       id INTEGER PRIMARY KEY AUTOINCREMENT,
       session_id TEXT NOT NULL,
@@ -32,6 +33,17 @@ export async function initDb() {
 
     CREATE INDEX IF NOT EXISTS idx_convo_session_time
     ON conversations(session_id, created_at);
+
+    -- ✅ (ใหม่) ตารางเก็บสถานะล่าสุดของน้องแมว (มีแค่ 1 แถวเสมอ)
+    CREATE TABLE IF NOT EXISTS pet_status (
+      id INTEGER PRIMARY KEY CHECK (id = 1),
+      hunger REAL,
+      happiness REAL,
+      bond REAL,
+      action TEXT,
+      emotion TEXT,
+      last_updated_at INTEGER
+    );
   `);
 
   return db;
@@ -62,7 +74,37 @@ export async function getRecentMessages(sessionId, limit = 12) {
     sessionId,
     limit
   );
-
-  // เอาเรียงเก่า -> ใหม่
   return rows.reverse();
+}
+
+// ✅ (ใหม่) โหลดสถานะล่าสุดจาก DB
+export async function loadPetStateDB() {
+  const db = await initDb();
+  const row = await db.get(`SELECT * FROM pet_status WHERE id = 1`);
+  if (!row) return null;
+
+  return {
+    hunger: row.hunger,
+    happiness: row.happiness,
+    bond: row.bond,
+    action: row.action,
+    emotion: row.emotion,
+    lastUpdatedAt: row.last_updated_at
+  };
+}
+
+// ✅ (ใหม่) บันทึกสถานะล่าสุดลง DB
+export async function savePetStateDB(state) {
+  const db = await initDb();
+  await db.run(`
+    INSERT INTO pet_status (id, hunger, happiness, bond, action, emotion, last_updated_at)
+    VALUES (1, ?, ?, ?, ?, ?, ?)
+    ON CONFLICT(id) DO UPDATE SET
+      hunger=excluded.hunger,
+      happiness=excluded.happiness,
+      bond=excluded.bond,
+      action=excluded.action,
+      emotion=excluded.emotion,
+      last_updated_at=excluded.last_updated_at
+  `, state.hunger, state.happiness, state.bond, state.action, state.emotion, state.lastUpdatedAt);
 }

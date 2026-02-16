@@ -1,11 +1,10 @@
 // Backend/services/pet.service.js
 import "dotenv/config";
 import { analyzeText, intentToAction } from "./nlp.service.js";
-import { generateCatReply } from "./openai.service.js"; // (ตอนนี้อาจเป็น Gemini แล้วก็ยังใช้ชื่อเดิมได้)
-import { saveMessage, getRecentMessages } from "../db.js";
+import { generateCatReply } from "./openai.service.js";
+import { saveMessage, getRecentMessages, loadPetStateDB, savePetStateDB } from "../db.js"; // ✅ import เพิ่ม
 
 // 🔧 ปรับค่าตรงนี้ได้ตามใจ
-// ตัวอย่าง: ให้อาหารเต็ม 100 ผ่านไป 2 ชม -> hunger ลดเหลือ 80 ถ้า hunger=10/ชม
 const DECAY_RATE_PER_HOUR = {
   hunger: 10,      // ลด 10% ต่อชั่วโมง
   happiness: 5,    // ลด 5% ต่อชั่วโมง
@@ -13,16 +12,38 @@ const DECAY_RATE_PER_HOUR = {
 };
 
 /** ---------------------------
- *  Pet State (in-memory)
- *  --------------------------- */
-const petState = {
+ * Pet State (In-Memory + DB Sync)
+ * --------------------------- */
+// กำหนดค่าเริ่มต้น (เผื่อเปิดครั้งแรกสุดที่ยังไม่มี DB)
+let petState = {
   hunger: 100,
   happiness: 80,
   bond: 50,
   action: "idle",
   emotion: "neutral",
-  lastUpdatedAt: Date.now()   // ⭐ สำคัญ
+  lastUpdatedAt: Date.now()
 };
+
+// ✅ ฟังก์ชันเริ่มระบบ: โหลดค่าเก่าจาก DB มาทับค่าเริ่มต้น
+async function initPetSystem() {
+  try {
+    const saved = await loadPetStateDB();
+    if (saved) {
+      console.log("📥 Loaded pet state from database.");
+      petState = saved;
+      // คำนวณเวลาที่หายไปทันทีที่เปิดเซิร์ฟ
+      applyTimeDecay();
+    } else {
+      console.log("🆕 New pet created. Saving initial state...");
+      await savePetStateDB(petState);
+    }
+  } catch (err) {
+    console.error("❌ Error initializing pet state:", err);
+  }
+}
+
+// เรียกทำงานทันทีเมื่อไฟล์ถูกโหลด
+initPetSystem();
 
 function clamp(n, min = 0, max = 100) {
   return Math.max(min, Math.min(max, n));
@@ -32,20 +53,24 @@ function applyTimeDecay() {
   const now = Date.now();
   const elapsedMs = now - petState.lastUpdatedAt;
 
-  // กันเคส clock เปลี่ยนย้อนกลับ หรือ lastUpdatedAt ยังไม่เซ็ต
   if (!petState.lastUpdatedAt || elapsedMs <= 0) {
     petState.lastUpdatedAt = now;
     return;
   }
 
   const elapsedHours = elapsedMs / (1000 * 60 * 60);
-  if (elapsedHours <= 0) return;
+  
+  // ถ้าเวลาผ่านไปน้อยมาก (เช่น request ถี่ๆ) ไม่ต้องคำนวณ
+  if (elapsedHours < 0.001) return;
 
   petState.hunger = clamp(petState.hunger - DECAY_RATE_PER_HOUR.hunger * elapsedHours);
   petState.happiness = clamp(petState.happiness - DECAY_RATE_PER_HOUR.happiness * elapsedHours);
   petState.bond = clamp(petState.bond - DECAY_RATE_PER_HOUR.bond * elapsedHours);
 
   petState.lastUpdatedAt = now;
+
+  // ✅ บันทึกลง DB (แบบไม่ต้องรอ await เพื่อไม่ให้หน่วง response)
+  savePetStateDB(petState).catch(console.error);
 }
 
 function updateState(patch) {
@@ -57,25 +82,30 @@ function updateState(patch) {
 
   if (typeof patch.action === "string") petState.action = patch.action;
   if (typeof patch.emotion === "string") petState.emotion = patch.emotion;
+
+  // ✅ บันทึกลง DB ทุกครั้งที่มีการเปลี่ยนค่า
+  savePetStateDB(petState).catch(console.error);
 }
 
 function autoResetAction(ms = 2000) {
   setTimeout(() => {
     petState.action = "idle";
+    // ✅ บันทึกตอนกลับเป็น idle
+    savePetStateDB(petState).catch(console.error);
   }, ms);
 }
 
 // ✅ route ต้องการตัวนี้
 export function getState() {
-  applyTimeDecay(); // ⭐ คำนวณย้อนหลังทุกครั้งก่อนส่ง state ออก
+  applyTimeDecay(); // คำนวณย้อนหลังทุกครั้งก่อนส่ง state ออก
   return { ...petState };
 }
 
 /** ---------------------------
- *  Simple actions (existing routes)
- *  --------------------------- */
+ * Simple actions
+ * --------------------------- */
 export function handleClick() {
-  applyTimeDecay(); // ✅ decay ก่อนเพิ่มค่า
+  applyTimeDecay();
 
   updateState({
     action: "happy",
@@ -93,7 +123,7 @@ export function handleClick() {
 }
 
 export function handleFeed() {
-  applyTimeDecay(); // ✅ decay ก่อนเติมเต็ม
+  applyTimeDecay();
 
   updateState({
     action: "eat",
@@ -111,7 +141,7 @@ export function handleFeed() {
 }
 
 export function handlePlay() {
-  applyTimeDecay(); // ✅ decay ก่อนเพิ่มค่า
+  applyTimeDecay();
 
   updateState({
     action: "play",
@@ -130,8 +160,8 @@ export function handlePlay() {
 }
 
 /** ---------------------------
- *  Chat (NLP + LLM + SQLite)
- *  --------------------------- */
+ * Chat Logic
+ * --------------------------- */
 function fallbackReply({ intent, sentiment }) {
   if (sentiment === "NEGATIVE" || intent === "sad") {
     return {
@@ -154,9 +184,8 @@ function fallbackReply({ intent, sentiment }) {
   };
 }
 
-// ✅ route เรียกแบบ handleChat(sessionId, text)
 export async function handleChat(sessionId, text) {
-  applyTimeDecay(); // ✅ ทำให้ state เป็นปัจจุบันก่อนส่งให้ AI / ก่อน update
+  applyTimeDecay(); // อัปเดตเวลาก่อนเริ่มคิด
 
   // 1) NLP
   let analysis = { intent: "unknown", sentiment: "NEUTRAL" };
@@ -168,7 +197,7 @@ export async function handleChat(sessionId, text) {
 
   const { intent, sentiment } = analysis;
 
-  // 2) history จาก DB
+  // 2) History
   let history = [];
   try {
     history = await getRecentMessages(sessionId, 12);
@@ -176,24 +205,24 @@ export async function handleChat(sessionId, text) {
     console.error("DB getRecentMessages failed:", e?.message || e);
   }
 
-  // 3) LLM generate reply
+  // 3) LLM Generation
   let ai;
   try {
     ai = await generateCatReply({
       userText: text,
       history,
       analysis,
-      petState // ✅ state หลัง decay แล้ว
+      petState // ส่ง state ที่อัปเดตแล้ว
     });
   } catch (e) {
     console.error("OpenAI generateCatReply failed:", e?.message || e);
     ai = fallbackReply({ intent, sentiment });
   }
 
-  // 4) action mapping
+  // 4) Map Action
   const action = ai.action || intentToAction(intent);
 
-  // 5) update state ตาม action/emotion
+  // 5) Update State Logic
   let happinessChange = 0, bondChange = 0, hungerChange = 0;
 
   if (action === "play") { happinessChange += 12; bondChange += 8; hungerChange += 5; }
@@ -201,7 +230,6 @@ export async function handleChat(sessionId, text) {
   if (action === "happy"){ happinessChange += 8;  bondChange += 4; }
   if (action === "sleep"){ happinessChange += 3;  hungerChange += 1; }
 
-  // sentiment influence
   if (sentiment === "NEGATIVE") {
     bondChange += 4;
     if (!ai.emotion) ai.emotion = "comforting";
@@ -220,7 +248,7 @@ export async function handleChat(sessionId, text) {
 
   autoResetAction(2000);
 
-  // 6) save to DB
+  // 6) Save Chat History
   try {
     await saveMessage({
       sessionId,

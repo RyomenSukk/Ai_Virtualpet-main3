@@ -1,7 +1,9 @@
+// Backend/server.js (Debug Version)
 import "dotenv/config";
 import express from "express";
 import cors from "cors";
 import path from "path";
+import fs from "fs"; // เพิ่ม fs เพื่อเช็คว่ามีโฟลเดอร์จริงไหม
 import { fileURLToPath } from "url";
 import petRouter from "./routes/pet.route.js";
 
@@ -9,34 +11,46 @@ const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
 const app = express();
+const PORT = 3000;
 
 app.use(cors());
 app.use(express.json());
 
-// ปิด CSP warnings
-app.use((req, res, next) => {
-    res.setHeader('Content-Security-Policy', "default-src * 'unsafe-inline' 'unsafe-eval' data: blob:;");
-    next();
-});
+// 1. กำหนด Path ของ Frontend
+const frontendPath = path.join(__dirname, '..', 'Frontend');
 
-// API Routes (ต้องมาก่อน static files!)
+// 🔍 DEBUG: ปริ้นท์ออกมาดูเลยว่า Path ถูกไหม
+console.log("---------------------------------------------------");
+console.log("🔍 DEBUGGING PATHS:");
+console.log(`1. Backend Folder:   ${__dirname}`);
+console.log(`2. Frontend Target:  ${frontendPath}`);
+// เช็คว่าโฟลเดอร์มีจริงไหม
+if (fs.existsSync(frontendPath)) {
+    console.log(`✅ Status: Folder 'Frontend' found!`);
+    console.log(`   Contents: ${fs.readdirSync(frontendPath).join(", ")}`);
+} else {
+    console.log(`❌ Status: Folder 'Frontend' NOT FOUND at this path!`);
+    console.log(`   👉 Please check your folder name (Case Sensitive).`);
+}
+console.log("---------------------------------------------------");
+
+// API Routes
 app.use("/api/pet", petRouter);
 
-// Serve static files จาก Frontend folder
-// __dirname = Backend/, ดังนั้น .. = root, ../Frontend = Frontend/
-app.use(express.static(path.join(__dirname, '..', 'Frontend')));
+// Serve Static Files
+app.use(express.static(frontendPath));
 
-// Serve assets (ถ้า assets อยู่ที่ root)
-app.use('/assets', express.static(path.join(__dirname, '..', 'assets')));
-
-// Fallback: ส่ง index.html สำหรับทุก route ที่ไม่ใช่ API
+// Fallback Route
 app.get('*', (req, res) => {
-    res.sendFile(path.join(__dirname, '..', 'Frontend', 'index.html'));
+    // เช็คก่อนส่ง ว่าไฟล์ index.html มีจริงไหม
+    const indexPath = path.join(frontendPath, 'index.html');
+    if (fs.existsSync(indexPath)) {
+        res.sendFile(indexPath);
+    } else {
+        res.status(404).send("❌ Error: index.html not found in Frontend folder.");
+    }
 });
 
-const PORT = 3000;
 app.listen(PORT, () => {
-    console.log(`🐱 Pet server running on http://localhost:${PORT}`);
-    console.log(`📁 Serving Frontend from: ${path.join(__dirname, '..', 'Frontend')}`);
-    console.log(`📁 Serving assets from: ${path.join(__dirname, '..', 'assets')}`);
+    console.log(`🚀 Server running at http://localhost:${PORT}`);
 });

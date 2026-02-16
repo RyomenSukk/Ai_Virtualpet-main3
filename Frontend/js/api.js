@@ -1,7 +1,9 @@
 // Frontend/js/api.js
-const API_URL = "http://localhost:3000/api/pet";
 
-// ---------- SESSION ----------
+// ✅ ใช้ URL เต็มเพื่อให้ชัวร์ว่ายิงเข้า Backend ถูกพอร์ต (ปรับได้ถ้าพอร์ตเปลี่ยน)
+const API_BASE = "http://localhost:3000/api";
+
+// --- Helper: จัดการ Session ID ---
 function getSessionId() {
   let sid = localStorage.getItem("pet_session_id");
   if (!sid) {
@@ -11,36 +13,64 @@ function getSessionId() {
   return sid;
 }
 
-// ---------- GET STATE ----------
+// --- 1. Get State (ดึงค่าสถานะล่าสุด) ---
 export async function getPetState() {
-  const res = await fetch(`${API_URL}/state`);
-  return await res.json();
+  try {
+    const res = await fetch(`${API_BASE}/pet/state`);
+    if (!res.ok) throw new Error("Network response was not ok");
+    return await res.json();
+  } catch (err) {
+    console.error("❌ Error fetching state:", err);
+    return null;
+  }
 }
 
-// ---------- CLICK ----------
-export async function clickPet() {
-  const res = await fetch(`${API_URL}/click`, { method: "POST" });
-  return await res.json();
-}
-
-// ---------- FEED ----------
+// --- 2. Actions (การกระทำต่างๆ) ---
 export async function feedPet() {
-  const res = await fetch(`${API_URL}/feed`, { method: "POST" });
-  return await res.json();
+  try {
+    const res = await fetch(`${API_BASE}/pet/feed`, { method: "POST" });
+    return await res.json();
+  } catch (err) {
+    console.error("Feed error:", err);
+    return null;
+  }
 }
 
-// ---------- PLAY ----------
 export async function playPet() {
-  const res = await fetch(`${API_URL}/play`, { method: "POST" });
-  return await res.json();
+  try {
+    const res = await fetch(`${API_BASE}/pet/play`, { method: "POST" });
+    return await res.json();
+  } catch (err) {
+    console.error("Play error:", err);
+    return null;
+  }
 }
 
-// ---------- CHAT ----------
+export async function clickPet() {
+  try {
+    // หมายเหตุ: เช็ค Backend routes ว่าใช้ /pet/click หรือ /pet/action
+    const res = await fetch(`${API_BASE}/pet/click`, { method: "POST" });
+    return await res.json();
+  } catch (err) {
+    console.error("Click error:", err);
+    return null;
+  }
+}
+
+// --- 3. Chat (ส่งข้อความ) ---
 export async function sendChat(text) {
-  const res = await fetch(`${API_URL}/chat`, {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ text, sessionId: getSessionId() }),
-  });
-  return await res.json();
+  try {
+    const res = await fetch(`${API_BASE}/chat`, { // หรือ /pet/chat แล้วแต่ Route
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ 
+        text, 
+        sessionId: getSessionId() 
+      }),
+    });
+    return await res.json();
+  } catch (err) {
+    console.error("Chat error:", err);
+    return null;
+  }
 }

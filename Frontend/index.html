@@ -3,10 +3,11 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <meta http-equiv="Content-Security-Policy"
-        content="default-src * 'unsafe-inline' 'unsafe-eval' data: blob:;" />
   <title>🐱 Virtual Pet Chat</title>
+  
   <link rel="stylesheet" href="./style.css" />
+  
+  <script src="https://cdn.jsdelivr.net/npm/pixi.js@7.x/dist/pixi.min.js"></script>
 </head>
 <body>
   <div class="game-container">
@@ -19,21 +20,21 @@
         <div class="stat-row">
           <div class="stat-label">🍖 Hunger</div>
           <div class="bar-container hunger">
-            <div id="hunger-bar" class="bar-fill"></div>
+            <div id="hunger-bar" class="bar-fill" style="width: 100%;"></div>
           </div>
         </div>
 
         <div class="stat-row">
           <div class="stat-label">😊 Happiness</div>
           <div class="bar-container happiness">
-            <div id="happiness-bar" class="bar-fill"></div>
+            <div id="happiness-bar" class="bar-fill" style="width: 100%;"></div>
           </div>
         </div>
 
         <div class="stat-row">
           <div class="stat-label">💕 Bond</div>
           <div class="bar-container bond">
-            <div id="bond-bar" class="bar-fill"></div>
+            <div id="bond-bar" class="bar-fill" style="width: 50%;"></div>
           </div>
         </div>
       </div>
@@ -57,10 +58,6 @@
     </div>
   </div>
 
-  <!-- ✅ โหลด pixi แบบ defer กันชนกับ module -->
-  <script defer src="https://cdn.jsdelivr.net/npm/pixi.js@7.x/dist/pixi.min.js"></script>
-
-  <!-- ✅ มี entry แค่ไฟล์เดียว -->
-  <script type="module" src="./main.js"></script>
+  <script type="module" src="./js/main.js"></script>
 </body>
 </html>
