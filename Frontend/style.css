@@ -31,8 +31,8 @@ body.theme-sad {
 }
 
 body {
-    background: var(--bg-gradient); /* ✅ ใช้ตัวแปรสีแทน */
-    transition: background 1.5s ease-in-out; /* ✅ เปลี่ยนสีพื้นหลังแบบนุ่มนวล */
+    background: var(--bg-gradient);
+    transition: background 1.5s ease-in-out; 
     font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
     height: 100vh;
     margin: 0;
@@ -49,13 +49,10 @@ body {
     pointer-events: none;
     z-index: 2;
     
-    /* Background Image */
     background-image: url('../assets/room-background.png');
     background-size: contain;
     background-position: center;
     background-repeat: no-repeat;
-    
-    /* Fallback gradient */
     background-color: transparent; 
 }
 
@@ -64,7 +61,6 @@ body {
     background-position: center center;
 }
 
-/* Overlay เพิ่มบรรยากาศ */
 #pet-area::before {
     content: '';
     position: absolute;
@@ -109,7 +105,6 @@ body {
     z-index: 10;
 }
 
-/* Custom scrollbar */
 #chat-box::-webkit-scrollbar { width: 8px; }
 #chat-box::-webkit-scrollbar-track { background: rgba(255, 255, 255, 0.1); border-radius: 10px; }
 #chat-box::-webkit-scrollbar-thumb { background: rgba(255, 255, 255, 0.3); border-radius: 10px; }
@@ -140,8 +135,8 @@ body {
 }
 
 .msg.user {
-    background: var(--chat-bubble-user); /* ✅ ใช้ตัวแปรสี เปลี่ยนตามธีม */
-    transition: background 0.5s ease;    /* ✅ เปลี่ยนสีนุ่มนวล */
+    background: var(--chat-bubble-user);
+    transition: background 0.5s ease;
     color: white;
     border-radius: 20px 20px 5px 20px;
     align-self: flex-end;
@@ -178,7 +173,7 @@ body {
 #chat-input input::placeholder { color: #999; }
 
 #chat-input button {
-    background: var(--bg-gradient); /* ✅ ปุ่มก็เปลี่ยนสีตามธีมด้วย */
+    background: var(--bg-gradient);
     transition: background 1.5s ease, transform 0.2s, box-shadow 0.2s;
     color: white;
     border: none;
@@ -300,53 +295,89 @@ body {
     box-shadow: 0 10px 40px rgba(0, 0, 0, 0.5);
 }
 
-/* ---------- ✨ SPECIAL EFFECTS (NEW) ✨ ---------- */
+/* ---------- ✨ SPECIAL EFFECTS (FIXED) ✨ ---------- */
 #effect-overlay {
     position: fixed;
-    top: 0; left: 0; width: 100%; height: 100%;
-    pointer-events: none; /* คลิกทะลุได้ */
-    z-index: 99; /* อยู่เหนือ Pet แต่ใต้ UI Chat */
+    top: 0; 
+    left: 0; 
+    width: 100%; 
+    height: 100%;
+    pointer-events: none; 
+    z-index: 9999; /* 🚀 ดันขึ้นมาหน้าสุด ทะลุหมดทุกอย่าง */
     display: none;
 }
 
-/* 🌈 Rainbow Effect (สำหรับ Keyword: เศร้า, เหนื่อย, ไม่ตื่น) */
-@keyframes rainbow-fade {
-    0% { opacity: 0; transform: scale(0.8) translateY(20px); }
-    50% { opacity: 0.6; transform: scale(1) translateY(0); }
-    100% { opacity: 0; transform: scale(1.1) translateY(-20px); }
+@keyframes floatUpFade {
+    0% { 
+        opacity: 0; 
+        background-position: 0px 100px; 
+    }
+    20% { 
+        opacity: 0.9; 
+    }
+    80% { 
+        opacity: 0.9; 
+    }
+    100% { 
+        opacity: 0; 
+        background-position: 0px -200px; 
+    }
 }
 
 .effect-rainbow {
+    position: absolute; /* 🚀 บังคับให้ขนาดเต็มจอ */
+    top: 0; left: 0;
     width: 100%; height: 100%;
-    background: radial-gradient(
-        circle at center, 
-        transparent 30%, 
-        rgba(255,255,255,0.2) 40%, 
-        rgba(255,0,0,0.1) 50%, 
-        rgba(255,165,0,0.1) 60%, 
-        rgba(255,255,0,0.1) 70%, 
-        rgba(0,128,0,0.1) 80%, 
-        rgba(0,0,255,0.1) 90%, 
-        rgba(238,130,238,0.1) 100%
-    );
-    animation: rainbow-fade 4s ease-in-out forwards;
+    /* 🚀 แปลงโค้ด SVG ให้เบราว์เซอร์อ่านออก */
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='150' height='150'%3E%3Ctext x='10' y='50' font-size='35'%3E🌈%3C/text%3E%3Ctext x='90' y='110' font-size='25'%3E✨%3C/text%3E%3Ctext x='100' y='40' font-size='20'%3E💖%3C/text%3E%3C/svg%3E");
+    background-repeat: repeat; 
+    opacity: 0;
+    animation: floatUpFade 4s ease-out forwards;
 }
 
-/* 🎉 Confetti Effect (สำหรับ Keyword: เก่ง, เย้, รัก) */
-/* ใช้วิธีง่ายๆ ด้วย CSS GIF หรือ SVG background แทนการใช้ JS Library หนักๆ */
 .effect-confetti {
+    position: absolute;
+    top: 0; left: 0;
     width: 100%; height: 100%;
-    background-image: url('https://cdn.jsdelivr.net/gh/loonywizard/js-confetti@master/emojis.svg'); 
-    /* หมายเหตุ: ถ้ามีไฟล์ gif confetti สวยๆ เปลี่ยน url ตรงนี้ได้เลย */
+    /* 🚀 เปลี่ยนจากไฟล์นอก มาเป็น Emoji พลุแบบเบาๆ แทน */
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='150' height='150'%3E%3Ctext x='20' y='40' font-size='30'%3E🎉%3C/text%3E%3Ctext x='80' y='100' font-size='30'%3E🎊%3C/text%3E%3Ctext x='110' y='30' font-size='20'%3E⭐%3C/text%3E%3C/svg%3E");
     background-repeat: repeat;
-    opacity: 0.8;
-    animation: fadeOut 3s forwards;
+    opacity: 0;
+    animation: floatUpFade 3s ease-out forwards;
+}
+/* ---------- 🧸 TOYS CONTAINER ---------- */
+#toys-container {
+    position: fixed;
+    bottom: 160px; /* ให้อยู่เหนือปุ่ม Action */
+    right: 30px;
+    display: flex;
+    flex-direction: column;
+    gap: 20px;
+    z-index: 25;
 }
 
-@keyframes fadeOut {
-    0% { opacity: 1; }
-    80% { opacity: 1; }
-    100% { opacity: 0; }
+.toy-item {
+    width: 60px;
+    height: 60px;
+    cursor: pointer;
+    transition: all 0.3s cubic-bezier(0.25, 0.8, 0.25, 1);
+    filter: drop-shadow(0 4px 6px rgba(0,0,0,0.4));
+    background: rgba(255, 255, 255, 0.6);
+    border-radius: 50%;
+    padding: 10px;
+    box-shadow: 0 4px 15px rgba(0, 0, 0, 0.2);
+}
+
+/* เอฟเฟกต์ตอนเอาเมาส์ชี้ (ขยับดุ๊กดิ๊ก) */
+.toy-item:hover {
+    transform: scale(1.3) rotate(-15deg) translateY(-10px);
+    background: rgba(255, 255, 255, 0.9);
+    filter: drop-shadow(0 8px 12px rgba(255, 215, 0, 0.6)); /* เรืองแสงสีทอง */
+}
+
+/* เอฟเฟกต์ตอนคลิก */
+.toy-item:active {
+    transform: scale(0.9) rotate(0deg);
 }
 
 /* ---------- RESPONSIVE ---------- */

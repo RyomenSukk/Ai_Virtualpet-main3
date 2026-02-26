@@ -36,9 +36,14 @@ export async function feedPet() {
   }
 }
 
-export async function playPet() {
+// ค้นหาฟังก์ชัน playPet แล้วแทนที่ด้วยโค้ดนี้:
+export async function playPet(toyName = null) {
   try {
-    const res = await fetch(`${API_BASE}/pet/play`, { method: "POST" });
+    const res = await fetch(`${API_BASE}/pet/play`, { 
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ toy: toyName }) // ส่งชื่อของเล่นไป
+    });
     return await res.json();
   } catch (err) {
     console.error("Play error:", err);
@@ -60,7 +65,6 @@ export async function clickPet() {
 // --- 3. Chat (ส่งข้อความ) ---
 export async function sendChat(text) {
   try {
-    // ❌ ของเดิม (ผิด): fetch(`${API_BASE}/chat`, ...
     
     // ✅ แก้เป็น (ถูก): ต้องมี /pet คั่นกลาง
     const res = await fetch(`${API_BASE}/pet/chat`, { 

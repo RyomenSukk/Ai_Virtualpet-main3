@@ -58,9 +58,10 @@ router.post("/feed", (req, res) => {
   res.json({ success: true, ...result });
 });
 
-// Play with pet
-router.post("/play", (req, res) => {
-  const result = handlePlay();
+router.post("/play", express.json(), (req, res) => {
+  // รับชื่อของเล่น (ถ้ามี)
+  const toy = req.body?.toy || null; 
+  const result = handlePlay(toy);
   res.json({ success: true, ...result });
 });
 

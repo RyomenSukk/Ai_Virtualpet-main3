@@ -7,7 +7,7 @@ import { sendChat } from "./api.js";
 /* =========================
    SETUP EFFECTS OVERLAY
 ========================= */
-// สร้างเลเยอร์สำหรับเอฟเฟกต์ (ถ้ายังไม่มีใน HTML)
+// สร้างเลเยอร์สำหรับเอฟเฟกต์
 let effectOverlay = document.getElementById('effect-overlay');
 if (!effectOverlay) {
     effectOverlay = document.createElement('div');
@@ -45,11 +45,11 @@ async function sendMessage() {
     
     if (!text) return;
     
-    // 1. แสดงข้อความ User ทันที (ไม่ต้องรอ Server)
+    // 1. แสดงข้อความ User ทันที
     addMessage("user", text);
     messageInput.value = "";
     
-    // 2. แสดงสถานะ "..." ทันที เพื่อให้รู้สึกตอบไว
+    // 2. แสดงสถานะ "..."
     const loadingId = addMessage("pet", "..."); 
     
     // ปิดปุ่มชั่วคราว
@@ -58,16 +58,22 @@ async function sendMessage() {
         sendButton.textContent = "...";
     }
 
-    // **ทริคจิตวิทยา:** ถ้า user บ่นเหนื่อย เปลี่ยนสีห้องรอเลย (Pre-emptive comforting)
-    if (text.match(/เหนื่อย|ท้อ|เศร้า|เบื่อ|ไม่ไหว/)) {
+    // 🚀 **ทริคจิตวิทยา: ตอบสนองเอฟเฟกต์ทันที (ไม่ต้องรอ AI)**
+    // ทำให้แอปดูเร็วปรู๊ดปร๊าดทันตาเห็น
+    const lowerText = text.toLowerCase();
+    if (lowerText.match(/เหนื่อย|ท้อ|เศร้า|เบื่อ|ไม่ไหว|ร้องไห้|กอด/)) {
         setTheme("comfort");
+        triggerEffect("rainbow");
+    } else if (lowerText.match(/เย้|เก่ง|รัก|ดีใจ|ฉลอง|สุดยอด|555/)) {
+        setTheme("happy");
+        triggerEffect("confetti");
     }
     
     try {
         // 3. ส่งไปหา Server
         const result = await sendChat(text);
         
-        // ลบข้อความ "..." ออกเมื่อได้คำตอบ
+        // ลบข้อความ "..."
         const loadingEl = document.getElementById(loadingId);
         if (loadingEl) loadingEl.remove();
 
@@ -80,17 +86,16 @@ async function sendMessage() {
             updateLocalState(result.pet);
             renderPet();
             
-            // ✅ 4. จัดการ Mood & Tone + Effects ตามผลวิเคราะห์
-            handleMoodAndEffects(result.analysis, text);
+            // ✅ 4. จัดการธีมสีห้องตามอารมณ์ที่ AI วิเคราะห์มาจริงๆ
+            handleMood(result.emotion || result.pet.emotion);
             
         } else {
             addMessage("pet", "เมี๊ยว... (ระบบมีปัญหา)");
         }
     } catch (error) {
         console.error("Error sending message:", error);
-        // เปลี่ยน "..." เป็นแจ้งเตือน error
         const loadingEl = document.getElementById(loadingId);
-        if (loadingEl) loadingEl.textContent = "เมี๊ยว... (เน็ตหลุด 😿)";
+        if (loadingEl) loadingEl.textContent = "เมี๊ยว... (สัญญาณเน็ตขาด 😿)";
     } finally {
         if (sendButton) {
             sendButton.disabled = false;
@@ -102,41 +107,24 @@ async function sendMessage() {
 /* =========================
    MOOD & EFFECTS MANAGER
 ========================= */
-function handleMoodAndEffects(analysis, userText) {
-    if (!analysis) return;
 
-    const { sentiment, intent } = analysis;
-    const lowerText = userText.toLowerCase();
+// อัปเดตสีห้องตามอารมณ์แมว (AI)
+function handleMood(petEmotion) {
+    if (!petEmotion) return;
 
-    // --- 1. เปลี่ยนธีมสีห้อง (Background) ---
-    // ถ้าเศร้า หรือ Intent คือปลอบใจ -> สีเขียว/ฟ้าพาสเทล (Comfort)
-    if (intent === 'COMFORT' || sentiment === 'NEGATIVE') {
+    if (petEmotion === 'comforting' || petEmotion === 'sad') {
         setTheme("comfort"); 
     } 
-    // ถ้ามีความสุข หรือเล่น -> สีส้ม/เหลือง (Happy)
-    else if (sentiment === 'POSITIVE' || intent === 'PLAY' || intent === 'PET') {
+    else if (petEmotion === 'happy' || petEmotion === 'playful') {
         setTheme("happy");   
     } 
-    // ปกติ
-    else {
+    else if (petEmotion === 'neutral') {
         setTheme("default"); 
-    }
-
-    // --- 2. Trigger Special Effects (Keyword Trigger) ---
-    // ถ้า User บ่นว่าเหนื่อย/ท้อ -> โชว์สายรุ้ง (Rainbow)
-    if (lowerText.match(/เหนื่อย|ท้อ|เศร้า|ไม่ไหว|ร้องไห้|กอด/)) {
-        triggerEffect("rainbow");
-    }
-    // ถ้าฉลอง/ดีใจ -> โชว์พลุ (Confetti)
-    else if (lowerText.match(/เย้|เก่ง|รัก|ดีใจ|ฉลอง|สุดยอด|555/)) {
-        triggerEffect("confetti");
     }
 }
 
 function setTheme(themeName) {
-    // ลบคลาส theme-* เดิมออกให้หมดก่อน
     document.body.classList.remove("theme-happy", "theme-comfort", "theme-sad");
-    
     if (themeName !== "default") {
         document.body.classList.add(`theme-${themeName}`);
     }
@@ -146,14 +134,16 @@ function triggerEffect(effectName) {
     const overlay = document.getElementById('effect-overlay');
     if (!overlay) return;
 
-    overlay.innerHTML = ""; // เคลียร์เอฟเฟกต์เก่า
+    // เคลียร์ของเก่า และแสดง Overlay
+    overlay.innerHTML = ""; 
     overlay.style.display = "block";
 
+    // สร้างกล่องเอฟเฟกต์ใหม่
     const effectDiv = document.createElement('div');
-    effectDiv.className = `effect-${effectName}`; // ตรงกับ CSS (.effect-rainbow, .effect-confetti)
+    effectDiv.className = `effect-${effectName}`; 
     overlay.appendChild(effectDiv);
 
-    // เล่นเสร็จแล้วซ่อน (เวลาต้องสัมพันธ์กับ animation ใน CSS)
+    // ปิด Overlay เมื่อ Animation จบ (4 วินาที)
     setTimeout(() => {
         overlay.style.display = "none";
         overlay.innerHTML = "";
@@ -168,8 +158,6 @@ function addMessage(sender, text) {
     if (!chatBox) return null;
 
     const messageDiv = document.createElement("div");
-    
-    // สร้าง ID เอาไว้ลบ (สำหรับ loading bubble)
     const id = "msg-" + Date.now() + Math.random().toString(36).substr(2, 9);
     messageDiv.id = id;
 
@@ -179,5 +167,5 @@ function addMessage(sender, text) {
     chatBox.appendChild(messageDiv);
     chatBox.scrollTop = chatBox.scrollHeight;
 
-    return id; // ส่ง ID กลับไปเผื่อใช้ลบ
+    return id; 
 }

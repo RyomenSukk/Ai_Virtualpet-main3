@@ -1,19 +1,25 @@
 // Frontend/js/pet.js
 
-// ✅ Import แบบ Relative Path (เพราะอยู่โฟลเดอร์เดียวกัน)
+// ✅ Import แบบ Relative Path
 import { petState, updateLocalState } from "./state.js";
 import { getPetState, clickPet } from "./api.js";
 
 /* =========================
-   ⚙️ CONFIG: ตั้งค่า Animation
+   ⚙️ CONFIG: ตั้งค่า Animation แมว
 ========================= */
 const ANIMATION_CONFIG = {
-    // แก้ไขจำนวน frames ให้ตรงกับไฟล์รูปจริงของคุณ
     idle:  { width: 32, height: 32, frames: 10, speed: 0.1,  posX: 0.5, posY: 0.7 },
     play:  { width: 32, height: 32, frames: 4,  speed: 0.15, posX: 0.5, posY: 0.7 },
     eat:   { width: 32, height: 32, frames: 15, speed: 0.1,  posX: 0.5, posY: 0.7 },
     happy: { width: 32, height: 32, frames: 8,  speed: 0.1,  posX: 0.5, posY: 0.7 },
     sleep: { width: 32, height: 32, frames: 4,  speed: 0.05, posX: 0.5, posY: 0.7 }
+};
+
+// ✅ CONFIG: ตั้งค่า Animation ของเล่น (ระบุจำนวนเฟรมตามที่คุณแจ้งมา)
+const TOY_ANIMATION_CONFIG = {
+    mouse:  { frames: 4, speed: 0.15 }, // Mouse-Sheet.png (4 frames)
+    ball:   { frames: 5, speed: 0.15 }, // PinkBall-Sheet.png (5 frames)
+    catToy: { frames: 6, speed: 0.2 }   // CatToy.png (6 frames)
 };
 
 const DISPLAY_SCALE = 4; 
@@ -41,6 +47,10 @@ let petSprite;
 let currentAction = "";
 const animations = {}; 
 
+// ✅ ตัวแปรเก็บ Animated Sprite ของเล่น
+let currentToySprite = null;
+const toyAnimations = {};
+
 /* =========================
    CORE LOGIC
 ========================= */
@@ -48,33 +58,46 @@ const animations = {};
 export async function initPet() {
     console.log("🚀 Initializing Pet...");
     await loadAssets();
-    await syncData(); // ดึงข้อมูลครั้งแรกจาก DB
-    startSyncLoop();  // เริ่มดึงข้อมูลอัตโนมัติเพื่อให้หลอดลดลงตามเวลาจริง
+    await syncData(); 
+    startSyncLoop();  
 }
 
 async function loadAssets() {
     const assetsToLoad = [
+        // แมว
         { alias: 'idle', src: `${BASE_PATH}idle.png` },
         { alias: 'play', src: `${BASE_PATH}play.png` },
         { alias: 'eat',  src: `${BASE_PATH}eat.png` },
         { alias: 'happy',src: `${BASE_PATH}happy.png` },
-        { alias: 'sleep',src: `${BASE_PATH}sleep.png` }
+        { alias: 'sleep',src: `${BASE_PATH}sleep.png` },
+        // ✅ ของเล่นแบบ Sprite Sheet (.png)
+        { alias: 'toy_mouse',  src: 'assets/Mouse-Sheet.png' },
+        { alias: 'toy_ball',   src: 'assets/PinkBall-Sheet.png' },
+        { alias: 'toy_catToy', src: 'assets/CatToy.png' }
     ];
 
     try {
         const textures = await PIXI.Assets.load(assetsToLoad);
 
+        // ตัดเฟรมแมว
         for (const key in ANIMATION_CONFIG) {
             if (textures[key]) {
                 animations[key] = createAnimation(textures[key], ANIMATION_CONFIG[key]);
             }
         }
+
+        // ✅ ตัดเฟรมของเล่น
+        if (textures['toy_mouse'])  toyAnimations.mouse = createToyAnimation(textures['toy_mouse'], TOY_ANIMATION_CONFIG.mouse);
+        if (textures['toy_ball'])   toyAnimations.ball = createToyAnimation(textures['toy_ball'], TOY_ANIMATION_CONFIG.ball);
+        if (textures['toy_catToy']) toyAnimations.catToy = createToyAnimation(textures['toy_catToy'], TOY_ANIMATION_CONFIG.catToy);
+
         console.log("✅ Assets loaded!");
     } catch (e) {
         console.error("❌ Failed to load assets:", e);
     }
 }
 
+// ฟังก์ชันตัดเฟรมแมว (เดิม)
 function createAnimation(texture, config) {
     const frames = [];
     const { width, height } = config;
@@ -101,13 +124,71 @@ function createAnimation(texture, config) {
     return anim;
 }
 
+// ✅ ฟังก์ชันใหม่: ตัดเฟรมของเล่นอัตโนมัติ (คำนวณความกว้างเฟรมให้เอง)
+function createToyAnimation(texture, config) {
+    const frames = [];
+    // เอาความกว้างภาพเต็ม หารด้วยจำนวนเฟรม
+    const frameWidth = texture.width / config.frames;
+    const frameHeight = texture.height;
+    
+    for (let i = 0; i < config.frames; i++) {
+        if (i * frameWidth < texture.width) {
+            const rect = new PIXI.Rectangle(i * frameWidth, 0, frameWidth, frameHeight);
+            const frame = new PIXI.Texture(texture.baseTexture, rect);
+            frames.push(frame);
+        }
+    }
+
+    const anim = new PIXI.AnimatedSprite(frames);
+    anim.animationSpeed = config.speed;
+    return anim;
+}
+
+// ✅ แสดงของเล่นในฉาก พร้อมเล่นอนิเมชัน
+export function showToyInScene(toyId) {
+    hideToyFromScene(); // ลบของเก่าก่อน
+
+    currentToySprite = toyAnimations[toyId];
+    if (!currentToySprite) return;
+
+    currentToySprite.anchor.set(0.5);
+    currentToySprite.scale.set(3); // ปรับขนาดของเล่นให้ใหญ่ขึ้นนิดนึง (เปลี่ยนตัวเลขได้)
+
+    // จัดตำแหน่งของเล่นให้อยู่ข้างๆ แมว
+    if (toyId === 'catToy') {
+        currentToySprite.x = app.screen.width * 0.65;
+        currentToySprite.y = app.screen.height * 0.55;
+        currentToySprite.rotation = -0.3; // เอียงไม้ตกแมวหน่อย
+    } else {
+        currentToySprite.x = app.screen.width * 0.65;
+        currentToySprite.y = app.screen.height * 0.7; // วางบนพื้น
+        currentToySprite.rotation = 0;
+    }
+
+    app.stage.addChild(currentToySprite);
+    currentToySprite.play(); // 🎬 เริ่มขยับดุ๊กดิ๊ก!
+}
+
+// ✅ ซ่อนของเล่น และหยุดอนิเมชัน
+export function hideToyFromScene() {
+    if (currentToySprite) {
+        app.stage.removeChild(currentToySprite);
+        currentToySprite.stop(); // หยุดขยับเพื่อประหยัดทรัพยากร
+        currentToySprite = null; // ไม่ต้อง destroy เพราะเดี๋ยวเรียกซ้ำ
+    }
+}
+
 export function renderPet() {
-    // ใช้ค่าจาก petState (ที่ import มาจาก state.js)
     const action = petState.action || 'idle';
 
     if (currentAction === action && petSprite) {
-        updateStatsUI(); // ถึงไม่เปลี่ยนท่า ก็ต้องอัปเดตหลอดเลือด
+        updateStatsUI(); 
         return;
+    }
+
+    // ✅ ถ้าไม่ได้อยู่ในท่าเล่น (play) ให้ซ่อนของเล่นทิ้งเลย
+    if (action !== 'play') {
+        hideToyFromScene();
     }
 
     if (petSprite) {
@@ -138,7 +219,6 @@ export function renderPet() {
 async function syncData() {
     try {
         const res = await getPetState();
-        // ตรวจสอบโครงสร้างข้อมูลที่ส่งกลับมา (บางครั้ง Backend ส่ง {success: true, pet: {...}})
         const data = res.pet ? res.pet : res; 
         
         if (data) {
@@ -151,14 +231,12 @@ async function syncData() {
 }
 
 function startSyncLoop() {
-    // ตั้งค่า Interval ให้ดึงข้อมูลทุก 5 วินาที
     setInterval(async () => {
         const res = await getPetState();
         const data = res.pet ? res.pet : res;
 
         if (data) {
             updateLocalState(data);
-            // อัปเดตเฉพาะหลอดเลือดและ UI โดยไม่ต้อง renderPet ใหม่ทั้งหมดถ้าท่าทางไม่เปลี่ยน
             updateStatsUI();
         }
     }, 5000); 
@@ -169,7 +247,6 @@ function updateStatsUI() {
     const happinessBar = document.getElementById("happiness-bar");
     const bondBar = document.getElementById("bond-bar");
 
-    // ปรับให้รองรับทศนิยมและป้องกันค่าติดลบ/เกินร้อย
     if (hungerBar) {
         const h = Math.min(100, Math.max(0, petState.hunger));
         hungerBar.style.width = `${h}%`;
